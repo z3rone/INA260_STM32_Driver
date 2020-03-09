@@ -120,6 +120,8 @@ static HAL_StatusTypeDef INA260_sel_reg_IT(struct INA260_Handle handle, uint8_t 
 
 	status = HAL_I2C_Master_Transmit_IT(handle.iface, handle.addr<<1, &reg, 1);
 
+	while(HAL_I2C_GetState(handle.iface) != HAL_I2C_STATE_READY || HAL_I2C_GetState(handle.iface) == HAL_I2C_STATE_ERROR);
+
 	return status;
 }
 
