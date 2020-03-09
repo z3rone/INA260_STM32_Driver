@@ -5,6 +5,8 @@
  *      Author: Falk
  */
 #include <stdbool.h>
+#include <sys/types.h>
+#include <stm32f3xx_hal.h>
 
 #ifndef INC_INA260_H_
 #define INC_INA260_H_
@@ -82,15 +84,25 @@ HAL_StatusTypeDef INA260_set_u_conv(struct INA260_Handle handle, INA260_conv u_c
 HAL_StatusTypeDef INA260_set_i_conv(struct INA260_Handle handle, INA260_conv i_conv_t);
 HAL_StatusTypeDef INA260_set_op(struct INA260_Handle handle, INA260_op op_mode);
 
+double INA260_convert_u(uint16_t val, bool reversed);
+double INA260_convert_i(uint16_t val, bool reversed);
+double INA260_convert_p(uint16_t val);
+
 double INA260_get_u(struct INA260_Handle handle);
 double INA260_get_i(struct INA260_Handle handle);
 double INA260_get_p(struct INA260_Handle handle);
 
+HAL_StatusTypeDef INA260_get_u_IT(struct INA260_Handle handle, uint8_t* data);
+HAL_StatusTypeDef INA260_get_i_IT(struct INA260_Handle handle, uint8_t* data);
+HAL_StatusTypeDef INA260_get_p_IT(struct INA260_Handle handle, uint8_t* data);
+
+#ifndef UTILS_H
 inline
 unsigned int del_bits(uint val, uint offset, uint len) {
 	uint mask = ~0 << offset;      // ...11110000...
 	mask &= ~(~0 << (offset+len)); // ...11110000... & ...01111111... --> ...01110000...
 	return val & ~mask;
 }
+#endif
 
 #endif /* INC_INA260_H_ */

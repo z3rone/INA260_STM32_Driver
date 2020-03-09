@@ -1,8 +1,11 @@
-#include "INA260.h"
+#include "./INA260.h"
 
 static int16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg);
 static HAL_StatusTypeDef INA260_sel_reg(struct INA260_Handle handle, uint8_t reg);
 static HAL_StatusTypeDef INA260_set_reg(struct INA260_Handle handle, uint8_t reg, int16_t val);
+static HAL_StatusTypeDef INA260_get_reg_IT(struct INA260_Handle handle, uint8_t reg, uint8_t* data);
+static HAL_StatusTypeDef INA260_sel_reg_IT(struct INA260_Handle handle, uint8_t reg);
+static HAL_StatusTypeDef INA260_set_reg_IT(struct INA260_Handle handle, uint8_t reg, int16_t val);
 
 HAL_StatusTypeDef INA260_config(struct INA260_Handle handle,
 		INA260_avg avg_mode,
@@ -53,16 +56,45 @@ HAL_StatusTypeDef INA260_set_op(struct INA260_Handle handle, INA260_op op_mode) 
 	return INA260_set_reg(handle, INA260_CONF_REG, conf);
 }
 
+double INA260_convert_u(uint16_t val, bool reversed) {
+	return val*INA260_U_FACT * (reversed ? (-1) : 1);
+}
+
+double INA260_convert_i(uint16_t val, bool reversed) {
+	return val * INA260_I_FACT * (reversed ? (-1) : 1);
+}
+
+double INA260_convert_p(uint16_t val) {
+	return val*INA260_P_FACT;
+}
+
+HAL_StatusTypeDef INA260_get_u_IT(struct INA260_Handle handle, uint8_t* data) {
+	return INA260_get_reg_IT(handle, INA260_U_REG, data);
+}
+
+HAL_StatusTypeDef INA260_get_i_IT(struct INA260_Handle handle, uint8_t* data) {
+	return INA260_get_reg_IT(handle, INA260_I_REG, data);
+}
+
+HAL_StatusTypeDef INA260_get_p_IT(struct INA260_Handle handle, uint8_t* data) {
+	return INA260_get_reg_IT(handle, INA260_P_REG, data);
+}
+
 double INA260_get_u(struct INA260_Handle handle) {
-	return INA260_get_reg(handle, INA260_U_REG) * INA260_U_FACT * (handle.reversed ? (-1) : 1);
+	return INA260_convert_u(INA260_get_reg(handle, INA260_U_REG), handle.reversed);
 }
 
 double INA260_get_i(struct INA260_Handle handle) {
-	return INA260_get_reg(handle, INA260_I_REG) * INA260_I_FACT * (handle.reversed ? (-1) : 1);
+	return INA260_convert_i(INA260_get_reg(handle, INA260_I_REG), handle.reversed);
 }
 
 double INA260_get_p(struct INA260_Handle handle) {
-	return INA260_get_reg(handle, INA260_P_REG) * INA260_P_FACT;
+	return INA260_convert_p(INA260_get_reg(handle, INA260_P_REG));
+}
+
+static HAL_StatusTypeDef INA260_get_reg_IT(struct INA260_Handle handle, uint8_t reg, uint8_t* data) {
+	INA260_sel_reg_IT(handle, reg);
+	return HAL_I2C_Master_Receive_IT(handle.iface, handle.addr<<1, data, 2);
 }
 
 static int16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg) {
@@ -83,12 +115,33 @@ static int16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg) {
 	return (data[0] << 8) | data[1];
 }
 
+static HAL_StatusTypeDef INA260_sel_reg_IT(struct INA260_Handle handle, uint8_t reg) {
+	HAL_StatusTypeDef status;
+
+	status = HAL_I2C_Master_Transmit_IT(handle.iface, handle.addr<<1, &reg, 1);
+
+	return status;
+}
+
 static HAL_StatusTypeDef INA260_sel_reg(struct INA260_Handle handle, uint8_t reg) {
 	HAL_StatusTypeDef status;
 
 	__disable_irq();
 	status = HAL_I2C_Master_Transmit(handle.iface, handle.addr<<1, &reg, 1, 1000);
 	__enable_irq();
+
+	return status;
+}
+
+static HAL_StatusTypeDef INA260_set_reg_IT(struct INA260_Handle handle, uint8_t reg, int16_t val) {
+	uint8_t data[3];
+	data[0] = reg;
+	data[1] = (val >> 8) & 0xFF;
+	data[2] = (val >> 0) & 0xFF;
+
+	HAL_StatusTypeDef status;
+
+	status = HAL_I2C_Master_Transmit_IT(handle.iface, handle.addr<<1, data, 3);
 
 	return status;
 }
