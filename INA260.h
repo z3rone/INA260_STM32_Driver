@@ -4,6 +4,9 @@
  *  Created on: 18 Feb 2020
  *      Author: Falk
  */
+#include "./lib/utils/utils_stm32.h"
+#include "./lib/utils/utils_binary.h"
+
 #include <stdbool.h>
 #include <sys/types.h>
 #include <stm32f3xx_hal.h>
@@ -11,6 +14,7 @@
 #ifndef INC_INA260_H_
 #define INC_INA260_H_
 
+#define INA260_I2C_NUM    6
 #define INA260_TIMEOUT    10
 #define INA260_RETRY_WAIT 5
 #define INA260_RETRY      2
@@ -32,6 +36,8 @@
 #define INA260_U_CONV_OFFSET  6
 #define INA260_I_CONV_OFFSET  3
 #define INA260_OP_MODE_OFFSET 0
+
+typedef uint16_t INA260_Config;
 
 typedef enum {
 	_1    = 0b000,
@@ -72,13 +78,22 @@ struct INA260_Handle {
 	bool reversed;
 };
 
-HAL_StatusTypeDef INA260_config(struct INA260_Handle handle,
-		INA260_avg avg_mode,
-		INA260_conv u_conv_t,
-		INA260_conv i_conv_t,
-		INA260_op op_mode);
+struct INA260_Read {
+	uint16_t addr;
+	uint16_t data;
+};
+
+HAL_StatusTypeDef INA260_set_config(struct INA260_Handle handle, INA260_Config config);
+HAL_StatusTypeDef INA260_get_config(struct INA260_Handle handle);
+HAL_StatusTypeDef INA260_set_config_IT(struct INA260_Handle handle, INA260_Config config);
+HAL_StatusTypeDef INA260_get_config_IT(struct INA260_Handle handle);
 
 HAL_StatusTypeDef INA260_reset(struct INA260_Handle handle);
+INA260_Config INA260_put_avg(INA260_Config conf, INA260_avg avg_mode);
+INA260_Config INA260_put_u_conv(INA260_Config conf, INA260_conv u_conv_t);
+INA260_Config INA260_put_i_conv(INA260_Config conf, INA260_conv i_conv_t);
+INA260_Config INA260_put_op(INA260_Config conf, INA260_op op_mode);
+
 HAL_StatusTypeDef INA260_set_avg(struct INA260_Handle handle, INA260_avg avg_mode);
 HAL_StatusTypeDef INA260_set_u_conv(struct INA260_Handle handle, INA260_conv u_conv_t);
 HAL_StatusTypeDef INA260_set_i_conv(struct INA260_Handle handle, INA260_conv i_conv_t);
@@ -92,17 +107,10 @@ double INA260_get_u(struct INA260_Handle handle);
 double INA260_get_i(struct INA260_Handle handle);
 double INA260_get_p(struct INA260_Handle handle);
 
-HAL_StatusTypeDef INA260_get_u_IT(struct INA260_Handle handle, uint8_t* data);
-HAL_StatusTypeDef INA260_get_i_IT(struct INA260_Handle handle, uint8_t* data);
-HAL_StatusTypeDef INA260_get_p_IT(struct INA260_Handle handle, uint8_t* data);
+HAL_StatusTypeDef INA260_get_u_IT(struct INA260_Handle handle);
+HAL_StatusTypeDef INA260_get_i_IT(struct INA260_Handle handle);
+HAL_StatusTypeDef INA260_get_p_IT(struct INA260_Handle handle);
 
-#ifndef UTILS_H
-inline
-unsigned int del_bits(uint val, uint offset, uint len) {
-	uint mask = ~0 << offset;      // ...11110000...
-	mask &= ~(~0 << (offset+len)); // ...11110000... & ...01111111... --> ...01110000...
-	return val & ~mask;
-}
-#endif
+struct INA260_Read INA260_get_read(I2C_TypeDef* def);
 
 #endif /* INC_INA260_H_ */
