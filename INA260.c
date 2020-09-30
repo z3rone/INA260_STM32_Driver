@@ -5,7 +5,7 @@ static uint8_t  INA260_rx_buf[INA260_I2C_NUM][2];
 static uint8_t  INA260_tx_buf[INA260_I2C_NUM][3];
 static uint16_t INA260_lastAddr[INA260_I2C_NUM];
 
-static uint16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg);
+static int16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg);
 static HAL_StatusTypeDef INA260_sel_reg(struct INA260_Handle handle, uint8_t reg);
 static HAL_StatusTypeDef INA260_set_reg(struct INA260_Handle handle, uint8_t reg, int16_t val);
 
@@ -19,7 +19,7 @@ HAL_StatusTypeDef INA260_set_config(struct INA260_Handle handle, INA260_Config c
 	return INA260_set_reg(handle, INA260_CONF_REG, config);
 }
 
-HAL_StatusTypeDef INA260_get_config(struct INA260_Handle handle) {
+INA260_Config INA260_get_config(struct INA260_Handle handle) {
 	INA260_get_config_IT(handle);
 
 	HAL_I2C_StateTypeDef state;
@@ -31,7 +31,12 @@ HAL_StatusTypeDef INA260_get_config(struct INA260_Handle handle) {
 }
 
 HAL_StatusTypeDef INA260_set_config_IT(struct INA260_Handle handle, INA260_Config config) {
-	return INA260_set_reg_IT(handle, INA260_CONF_REG, config);
+	HAL_StatusTypeDef status = INA260_set_reg_IT(handle, INA260_CONF_REG, config);
+	HAL_I2C_StateTypeDef state;
+	while((state = HAL_I2C_GetState(handle.iface)) != HAL_I2C_STATE_READY) {
+		if(HAL_I2C_GetState(handle.iface) == HAL_I2C_STATE_ERROR) return HAL_ERROR;
+	}
+	return status;
 }
 
 HAL_StatusTypeDef INA260_get_config_IT(struct INA260_Handle handle) {
@@ -143,15 +148,15 @@ HAL_StatusTypeDef INA260_set_op(struct INA260_Handle handle, INA260_op op_mode) 
 }
 
 
-double INA260_convert_u(uint16_t val, bool reversed) {
+double INA260_convert_u(int16_t val, bool reversed) {
 	return val*INA260_U_FACT * (reversed ? (-1) : 1);
 }
 
-double INA260_convert_i(uint16_t val, bool reversed) {
+double INA260_convert_i(int16_t val, bool reversed) {
 	return val * INA260_I_FACT * (reversed ? (-1) : 1);
 }
 
-double INA260_convert_p(uint16_t val) {
+double INA260_convert_p(int16_t val) {
 	return val*INA260_P_FACT;
 }
 
@@ -191,13 +196,14 @@ static HAL_StatusTypeDef INA260_get_reg_IT(struct INA260_Handle handle, uint8_t 
 	return HAL_I2C_Master_Receive_IT(handle.iface, handle.addr<<1, INA260_rx_buf[index], 2);
 }
 
-static uint16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg) {
+static int16_t INA260_get_reg(struct INA260_Handle handle, uint8_t reg) {
 	INA260_get_reg_IT(handle, reg);
 	HAL_I2C_StateTypeDef state;
 	while((state = HAL_I2C_GetState(handle.iface)) != HAL_I2C_STATE_READY) {
 		if(state == HAL_I2C_STATE_ERROR) return HAL_ERROR;
 	}
-	return INA260_get_read(handle.iface->Instance).data;
+	struct INA260_Read read = INA260_get_read(handle.iface->Instance);
+	return read.data;
 }
 
 static HAL_StatusTypeDef INA260_sel_reg_IT(struct INA260_Handle handle, uint8_t reg) {
@@ -230,8 +236,9 @@ static HAL_StatusTypeDef INA260_set_reg_IT(struct INA260_Handle handle, uint8_t 
 	int index = INA260_GetIfaceIndex(handle.iface->Instance);
 
 	uint8_t* data = INA260_tx_buf[index];
-	set_bits(data, reg, 0, 8);
-	set_bits(data, val, 8, 16);
+	set_bits_lsbf(data, reg, 0, 8);
+	set_bits_lsbf(data, val, 8, 16);
+	change_byte_order(data+1, 2);
 
 	return HAL_I2C_Master_Transmit_IT(handle.iface, handle.addr<<1, data, 3);
 }
@@ -249,9 +256,11 @@ static HAL_StatusTypeDef INA260_set_reg(struct INA260_Handle handle, uint8_t reg
 
 struct INA260_Read INA260_get_read(I2C_TypeDef* def) {
 	int index = INA260_GetIfaceIndex(def);
+	uint16_t data = get_bits(INA260_rx_buf[index], 0, 16);
+	change_byte_order(&data, 2);
 	struct INA260_Read read = {
 		INA260_lastAddr[index],
-		get_bits(INA260_rx_buf[index], 0, 16)
+		data
 	};
 	return read;
 }
