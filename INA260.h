@@ -6,6 +6,7 @@
  */
 #include "./lib/utils/utils_stm32.h"
 #include "./lib/utils/utils_binary.h"
+#include "./lib/uthash/src/uthash.h"
 
 #include <stdbool.h>
 #include <sys/types.h>
@@ -36,6 +37,8 @@
 #define INA260_U_CONV_OFFSET  6
 #define INA260_I_CONV_OFFSET  3
 #define INA260_OP_MODE_OFFSET 0
+
+#define INA260_TIMEOUT 10
 
 typedef uint16_t INA260_Config;
 
@@ -72,45 +75,49 @@ typedef enum {
 	iu_cont = 0b111
 } INA260_op;
 
+typedef enum {
+	none,
+	read_conf_it, read_u_it, read_i_it, read_p_it, write_conf_it,
+	read_conf, read_u, read_i, read_p, write_conf
+} ina260_comop;
+
 struct INA260_Handle {
 	uint16_t addr;
 	I2C_HandleTypeDef* iface;
 	bool reversed;
+	ina260_comop operation;
+	uint8_t rx_buf[2];
+	uint8_t tx_buf[3];
+	double u,i,p;
+	uint16_t conf;
+	UT_hash_handle hh;
 };
+void INA260_PutAvg(struct INA260_Handle* handle, INA260_avg avg_mode);
+void INA260_PutUConv(struct INA260_Handle* handle, INA260_conv u_conv_t);
+void INA260_PutIConv(struct INA260_Handle* handle, INA260_conv i_conv_t);
+void INA260_PutOp(struct INA260_Handle* handle, INA260_op op_mode);
 
-struct INA260_Read {
-	uint16_t addr;
-	uint16_t data;
-};
+double INA260_ConvertU(uint16_t val);
+double INA260_ConvertI(uint16_t val);
+double INA260_ConvertP(uint16_t val);
 
-HAL_StatusTypeDef INA260_set_config(struct INA260_Handle handle, INA260_Config config);
-HAL_StatusTypeDef INA260_get_config(struct INA260_Handle handle);
-HAL_StatusTypeDef INA260_set_config_IT(struct INA260_Handle handle, INA260_Config config);
-HAL_StatusTypeDef INA260_get_config_IT(struct INA260_Handle handle);
 
-HAL_StatusTypeDef INA260_reset(struct INA260_Handle handle);
-INA260_Config INA260_put_avg(INA260_Config conf, INA260_avg avg_mode);
-INA260_Config INA260_put_u_conv(INA260_Config conf, INA260_conv u_conv_t);
-INA260_Config INA260_put_i_conv(INA260_Config conf, INA260_conv i_conv_t);
-INA260_Config INA260_put_op(INA260_Config conf, INA260_op op_mode);
+HAL_StatusTypeDef INA260_SetConfig(struct INA260_Handle* handle);
+HAL_StatusTypeDef INA260_GetConfig(struct INA260_Handle* handle);
 
-HAL_StatusTypeDef INA260_set_avg(struct INA260_Handle handle, INA260_avg avg_mode);
-HAL_StatusTypeDef INA260_set_u_conv(struct INA260_Handle handle, INA260_conv u_conv_t);
-HAL_StatusTypeDef INA260_set_i_conv(struct INA260_Handle handle, INA260_conv i_conv_t);
-HAL_StatusTypeDef INA260_set_op(struct INA260_Handle handle, INA260_op op_mode);
+HAL_StatusTypeDef INA260_SetConfig_IT(struct INA260_Handle* handle);
+HAL_StatusTypeDef INA260_GetConfig_IT(struct INA260_Handle* handle);
+HAL_StatusTypeDef INA260_GetU_IT(struct INA260_Handle* handle);
+HAL_StatusTypeDef INA260_GetI_IT(struct INA260_Handle* handle);
+HAL_StatusTypeDef INA260_GetP_IT(struct INA260_Handle* handle);
 
-double INA260_convert_u(uint16_t val, bool reversed);
-double INA260_convert_i(uint16_t val, bool reversed);
-double INA260_convert_p(uint16_t val);
+__weak void INA260_RxUCallback(struct INA260_Handle* handle);
+__weak void INA260_RxICallback(struct INA260_Handle* handle);
+__weak void INA260_RxPCallback(struct INA260_Handle* handle);
+__weak void INA260_RxConfCallback(struct INA260_Handle* handle);
+__weak void INA260_TxConfCallback(struct INA260_Handle* handle);
 
-double INA260_get_u(struct INA260_Handle handle);
-double INA260_get_i(struct INA260_Handle handle);
-double INA260_get_p(struct INA260_Handle handle);
-
-HAL_StatusTypeDef INA260_get_u_IT(struct INA260_Handle handle);
-HAL_StatusTypeDef INA260_get_i_IT(struct INA260_Handle handle);
-HAL_StatusTypeDef INA260_get_p_IT(struct INA260_Handle handle);
-
-struct INA260_Read INA260_get_read(I2C_TypeDef* def);
+HAL_StatusTypeDef INA260_I2C_RxInterruptHandler(I2C_HandleTypeDef *hi2c);
+HAL_StatusTypeDef INA260_I2C_TxInterruptHandler(I2C_HandleTypeDef *hi2c);
 
 #endif /* INC_INA260_H_ */
