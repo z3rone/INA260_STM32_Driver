@@ -144,7 +144,7 @@ HAL_StatusTypeDef INA260_GetP_IT(struct INA260_Handle* handle) {
 
 HAL_StatusTypeDef INA260_I2C_TxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 	struct INA260_Handle* dev = NULL;
-	HASH_FIND_PTR(occupations, hi2c->Instance, dev);
+	HASH_FIND_PTR(occupations, &(hi2c->Instance), dev);
 
 	if(dev==NULL) {
 		return HAL_ERROR;
@@ -171,7 +171,7 @@ HAL_StatusTypeDef INA260_I2C_TxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 
 HAL_StatusTypeDef INA260_I2C_RxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 	struct INA260_Handle* dev = NULL;
-	HASH_FIND_PTR(occupations, hi2c->Instance, dev);
+	HASH_FIND_PTR(occupations, &(hi2c->Instance), dev);
 
 	if(dev==NULL) {
 		return HAL_ERROR;
@@ -182,48 +182,57 @@ HAL_StatusTypeDef INA260_I2C_RxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 	switch(dev->operation) {
 	case read_conf_it: {
 		dev->conf = value;
+		dev->operation = none;
+		INA260_ReleaseBus(dev);
 		INA260_RxConfCallback(dev);
 		break;
 	}
 	case read_u_it: {
 		dev->u = INA260_ConvertU(value);
+		dev->operation = none;
+		INA260_ReleaseBus(dev);
 		INA260_RxUCallback(dev);
 		break;
 	}
 	case read_i_it: {
 		dev->i = INA260_ConvertI(value);
+		dev->operation = none;
+		INA260_ReleaseBus(dev);
 		INA260_RxICallback(dev);
 		break;
 	}
 	case read_p_it: {
 		dev->p = INA260_ConvertP(value);
+		dev->operation = none;
+		INA260_ReleaseBus(dev);
 		INA260_RxPCallback(dev);
 		break;
 	}
 	default: break;
 	}
 
-	dev->operation = none;
-	INA260_ReleaseBus(dev);
-
 	return HAL_OK;
 }
 
 static HAL_StatusTypeDef INA260_OccupyBus(struct INA260_Handle* dev) {
+	__disable_irq();
 	struct INA260_Handle* match = NULL;
-	HASH_FIND_PTR(occupations, dev->iface->Instance, match);
+	HASH_FIND_PTR(occupations, &(dev->iface->Instance), match);
 
 	if(match != NULL) {
+		__enable_irq();
 		return HAL_BUSY;
 	}
 
 	HASH_ADD_PTR(occupations, iface->Instance, dev);
-
+	__enable_irq();
 	return HAL_OK;
 }
 
 static HAL_StatusTypeDef INA260_ReleaseBus(struct INA260_Handle* dev) {
+	__disable_irq();
 	HASH_DEL(occupations, dev);
+	__enable_irq();
 
 	return HAL_OK;
 }
