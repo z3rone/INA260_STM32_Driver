@@ -26,11 +26,11 @@ void INA260_PutOp(struct INA260_Handle* handle, INA260_op op_mode) {
 	handle->conf |= op_mode << INA260_OP_MODE_OFFSET;
 }
 
-double INA260_ConvertU(uint16_t val) {
+double INA260_ConvertU(int16_t val) {
 	return val*INA260_U_FACT;
 }
 
-double INA260_ConvertI(uint16_t val) {
+double INA260_ConvertI(int16_t val) {
 	return val * INA260_I_FACT;
 }
 
@@ -47,7 +47,7 @@ HAL_StatusTypeDef INA260_SetConfig(struct INA260_Handle* handle) {
 
 	handle->tx_buf[0] = INA260_CONF_REG;
 	handle->tx_buf[1] = handle->conf >> 8;
-	handle->tx_buf[2] = handle->conf && 0xFF;
+	handle->tx_buf[2] = handle->conf;
 
 	status = HAL_I2C_Master_Transmit(handle->iface, handle->addr << 1, handle->tx_buf, 3, INA260_TIMEOUT);
 
@@ -66,13 +66,13 @@ HAL_StatusTypeDef INA260_GetConfig(struct INA260_Handle* handle) {
 
 	handle->tx_buf[0] = INA260_CONF_REG;
 
-	status = HAL_I2C_Master_Transmit_IT(handle->iface, handle->addr << 1, handle->tx_buf, 1);
+	status = HAL_I2C_Master_Transmit(handle->iface, handle->addr << 1, handle->tx_buf, 1, INA260_TIMEOUT);
 
 	if(status!=HAL_OK) {
 		return status;
 	}
 
-	status = HAL_I2C_Master_Receive_IT(handle->iface, handle->addr << 1, handle->rx_buf, 1);
+	status = HAL_I2C_Master_Receive(handle->iface, handle->addr << 1, handle->rx_buf, 2, INA260_TIMEOUT);
 
 	handle->conf = handle->rx_buf[0]<<8 | handle->rx_buf[1];
 
@@ -92,9 +92,9 @@ HAL_StatusTypeDef INA260_SetConfig_IT(struct INA260_Handle* handle) {
 
 	handle->tx_buf[0] = INA260_CONF_REG;
 	handle->tx_buf[1] = handle->conf >> 8;
-	handle->tx_buf[2] = handle->conf && 0xFF;
+	handle->tx_buf[2] = handle->conf;
 
-	return HAL_I2C_Master_Receive_IT(handle->iface, handle->addr << 1, handle->tx_buf, 3);
+	return HAL_I2C_Master_Transmit_IT(handle->iface, handle->addr << 1, handle->tx_buf, 3);
 }
 
 HAL_StatusTypeDef INA260_GetConfig_IT(struct INA260_Handle* handle) {
@@ -158,9 +158,9 @@ HAL_StatusTypeDef INA260_I2C_TxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 		return HAL_I2C_Master_Receive_IT(hi2c, dev->addr << 1, dev->rx_buf, 2);
 	}
 	case write_conf_it: {
-		INA260_TxConfCallback(dev);
-		INA260_ReleaseBus(dev);
 		dev->operation = none;
+		INA260_ReleaseBus(dev);
+		INA260_TxConfCallback(dev);
 		return HAL_OK;
 	}
 	default: break;
@@ -177,7 +177,7 @@ HAL_StatusTypeDef INA260_I2C_RxInterruptHandler(I2C_HandleTypeDef *hi2c) {
 		return HAL_ERROR;
 	}
 
-	uint16_t value = dev->rx_buf[0]<<8 | dev->rx_buf[1];
+	int16_t value = dev->rx_buf[0]<<8 | dev->rx_buf[1];
 
 	switch(dev->operation) {
 	case read_conf_it: {

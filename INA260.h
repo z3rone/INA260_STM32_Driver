@@ -97,8 +97,8 @@ void INA260_PutUConv(struct INA260_Handle* handle, INA260_conv u_conv_t);
 void INA260_PutIConv(struct INA260_Handle* handle, INA260_conv i_conv_t);
 void INA260_PutOp(struct INA260_Handle* handle, INA260_op op_mode);
 
-double INA260_ConvertU(uint16_t val);
-double INA260_ConvertI(uint16_t val);
+double INA260_ConvertU(int16_t val);
+double INA260_ConvertI(int16_t val);
 double INA260_ConvertP(uint16_t val);
 
 
